@@ -1,0 +1,6 @@
+require("angel.options")
+require("angel.keymaps")
+require("angel.lazy")
+require("angel.lsp")
+require("angel.terminal")
+require("angel.run")
