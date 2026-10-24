@@ -1,4 +1,5 @@
 vim.g.mapleader = " "
+if vim.g.vscode then require("angel.vscode") return end
 
 -- General
 vim.keymap.set("n", "<leader>w", "<cmd>w<cr>", {

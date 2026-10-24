@@ -172,6 +172,7 @@ return {
 	-- Wraps alrededor de texto
 	{
 		"echasnovski/mini.surround",
+		vscode = true,
 		version = "*",
 		event = "VeryLazy",
 		opts = {},

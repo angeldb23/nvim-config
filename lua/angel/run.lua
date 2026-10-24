@@ -2,7 +2,7 @@
 local runners = {
 	cpp = function(file)
 		local out = "/tmp/" .. vim.fn.fnamemodify(file, ":t:r")
-		return "g++ -std=c++17 -Wall '" .. file .. "' -o '" .. out .. "' && '" .. out .. "'"
+		return "g++ -std=c++23 -Wall '" .. file .. "' -o '" .. out .. "' && '" .. out .. "'"
 	end,
 	c = function(file)
 		local out = "/tmp/" .. vim.fn.fnamemodify(file, ":t:r")

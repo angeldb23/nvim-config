@@ -15,4 +15,10 @@ vim.opt.rtp:prepend(lazypath)
 
 require("lazy").setup({
 	{ import = "angel.plugins" },
+}, {
+	defaults = {
+		cond = function(plugin)
+			return not vim.g.vscode or plugin.vscode == true
+		end,
+	},
 })

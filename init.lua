@@ -1,4 +1,5 @@
 require("angel")
+if vim.g.vscode then return end
 pcall(require, "angel.transparent")
 
 -- Si arranca en ~ o /, ir directo a tu carpeta de proyectos
