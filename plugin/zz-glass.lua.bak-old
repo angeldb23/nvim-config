@@ -1,0 +1,14 @@
+if not vim.g.neovide then return end
+
+local function default(k, v)
+  if vim.g[k] == nil then vim.g[k] = v end
+end
+
+default("neovide_floating_blur_amount_x", 12.0)
+default("neovide_floating_blur_amount_y", 12.0)
+default("neovide_floating_shadow", true)
+default("neovide_floating_z_height", 10)
+
+-- translucidez de menús y ventanas flotantes
+vim.o.pumblend = 15
+vim.o.winblend = 15

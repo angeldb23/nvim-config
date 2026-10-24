@@ -210,6 +210,7 @@ local function get_themes()
 end
 
 local function display_name(name)
+    if name == "caelestia" then return "Dynamic (wallpaper)" end
     return name:gsub("[-_]", " "):gsub("(%a)([%w]*)", function(a, b)
         return a:upper() .. b
     end)

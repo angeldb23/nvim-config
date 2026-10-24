@@ -2,37 +2,243 @@
 -- Dashboard, statusline, bufferline, notificaciones y UI general
 
 return {
-	-- Barra de estado
-	{
-		"nvim-lualine/lualine.nvim",
-		dependencies = {
-			"nvim-tree/nvim-web-devicons",
-		},
-		config = function()
-			local function lsp_clients()
-				local names = {}
-				for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
-					table.insert(names, client.name)
-				end
-				return table.concat(names, ", ")
-			end
+	-- Barra de estado (islas)
+{
+    "nvim-lualine/lualine.nvim",
+    dependencies = {
+      "nvim-tree/nvim-web-devicons",
+    },
+    config = function()
+      local function g(code) return vim.fn.nr2char(code) end
+      local L, R = g(0xe0b6), g(0xe0b4) -- bordes redondeados
+      local ICON = {
+        branch = g(0xe725), lsp = g(0xf013), pos = g(0xf041),
+        err = g(0xf057), warn = g(0xf071), info = g(0xf05a), hint = g(0xf0eb),
+      }
 
-			require("lualine").setup({
-				options = {
-					theme = "auto",
-					globalstatus = true,
-				},
-				sections = {
-					lualine_a = { "mode" },
-					lualine_b = { "branch" },
-					lualine_c = { "filename", lsp_clients },
-					lualine_x = { "diagnostics", "filetype" },
-					lualine_y = { "progress" },
-					lualine_z = { "location" },
-				},
-			})
-		end,
-	},
+      local function hexof(name, key, fallback)
+        local ok, h = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+        if ok and h and h[key] then
+          return string.format("#%06x", h[key])
+        end
+        return fallback
+      end
+
+      local function esc(s) return (s:gsub("%%", "%%%%")) end
+      local function set(name, o) vim.api.nvim_set_hl(0, name, o) end
+
+      -- colores de las islas, derivados del tema activo
+      local ACCENTS = { N = "Function", I = "String", V = "Keyword", R = "DiagnosticError", C = "Constant", T = "Special" }
+      local ACCENT_FB = { N = "#89b4fa", I = "#a6e3a1", V = "#cba6f7", R = "#f38ba8", C = "#fab387", T = "#f5c2e7" }
+
+      local function define_hl()
+        local function parse(h)
+          h = h:gsub("#", "")
+          return tonumber(h:sub(1, 2), 16), tonumber(h:sub(3, 4), 16), tonumber(h:sub(5, 6), 16)
+        end
+        local function blend(a, b, t)
+          local ar, ag, ab = parse(a)
+          local br, bgc, bb = parse(b)
+          local function mix(x, y) return math.floor(x + (y - x) * t + 0.5) end
+          return string.format("#%02x%02x%02x", mix(ar, br), mix(ag, bgc), mix(ab, bb))
+        end
+
+        local base = hexof("Normal", "bg", nil)
+        local basebg = "NONE"
+        local dark = base or "#1e1e2e"
+        local fg = hexof("Normal", "fg", "#cdd6f4")
+        -- la píldora es un tono claramente distinto del fondo
+        local pill = blend(dark, fg, 0.16)
+
+        -- la barra tiene EXACTAMENTE el fondo del editor (sin banda)
+        set("StatusLine", { fg = fg, bg = basebg })
+        set("StatusLineNC", { fg = fg, bg = basebg })
+
+        set("IslandBase", { fg = fg, bg = basebg })
+        set("IslandCap", { fg = pill, bg = basebg })
+        set("IslandBody", { fg = fg, bg = pill })
+
+        for k, group in pairs(ACCENTS) do
+          local accent = hexof(group, "fg", ACCENT_FB[k])
+          set("IslandModeBody" .. k, { fg = dark, bg = accent, bold = true })
+          set("IslandModeCap" .. k, { fg = accent, bg = basebg })
+        end
+
+        local function icon(name, group, fb)
+          set(name, { fg = hexof(group, "fg", fb), bg = pill })
+        end
+        icon("IslandIconBranch", "Keyword", "#cba6f7")
+        icon("IslandIconFile", "Function", "#89b4fa")
+        icon("IslandIconLsp", "Constant", "#fab387")
+        icon("IslandIconFt", "Type", "#f9e2af")
+        icon("IslandIconPos", "Special", "#f5c2e7")
+        icon("IslandDiffAdd", "String", "#a6e3a1")
+        icon("IslandDiffChange", "Constant", "#fab387")
+        icon("IslandDiffDelete", "DiagnosticError", "#f38ba8")
+        icon("IslandDiagError", "DiagnosticError", "#f38ba8")
+        icon("IslandDiagWarn", "DiagnosticWarn", "#f9e2af")
+        icon("IslandDiagInfo", "DiagnosticInfo", "#89dceb")
+        icon("IslandDiagHint", "DiagnosticHint", "#94e2d5")
+      end
+
+      -- una isla = borde + cuerpo + borde + espacio vacío
+      local function island(icon_hl, icon, text)
+        local s = "%#IslandCap#" .. L .. "%#IslandBody# "
+        if icon ~= "" then
+          s = s .. "%#" .. icon_hl .. "#" .. icon .. "%#IslandBody# "
+        end
+        return s .. text .. "%#IslandBody# %#IslandCap#" .. R .. "%#IslandBase#  "
+      end
+
+      local MODES = {
+        n = { "NORMAL", "N" }, i = { "INSERT", "I" }, v = { "VISUAL", "V" },
+        V = { "V-LINE", "V" }, ["\22"] = { "V-BLOCK", "V" }, s = { "SELECT", "V" },
+        S = { "SELECT", "V" }, R = { "REPLACE", "R" }, c = { "COMMAND", "C" },
+        t = { "TERMINAL", "T" },
+      }
+
+      local function c_mode()
+        local m = vim.fn.mode()
+        local info = MODES[m] or MODES[m:sub(1, 1)] or MODES.n
+        local k = info[2]
+        return "%#IslandBase# %#IslandModeCap" .. k .. "#" .. L
+          .. "%#IslandModeBody" .. k .. "# " .. info[1] .. " "
+          .. "%#IslandModeCap" .. k .. "#" .. R .. "%#IslandBase#  "
+      end
+
+      local branch_cache = {}
+      local function git_branch()
+        local dir = vim.fn.expand("%:p:h")
+        if dir == "" then dir = vim.fn.getcwd() end
+        if branch_cache[dir] ~= nil then return branch_cache[dir] end
+        local out = vim.fn.systemlist({ "git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD" })
+        local b = (vim.v.shell_error == 0 and out[1]) or ""
+        branch_cache[dir] = b
+        return b
+      end
+
+      local function c_branch()
+        local b = vim.b.gitsigns_head or git_branch()
+        if not b or b == "" then return "" end
+        return island("IslandIconBranch", ICON.branch, esc(b))
+      end
+
+      local function c_diff()
+        local d = vim.b.gitsigns_status_dict
+        if not d then return "" end
+        local parts = {}
+        if (d.added or 0) > 0 then parts[#parts + 1] = "%#IslandDiffAdd#+" .. d.added end
+        if (d.changed or 0) > 0 then parts[#parts + 1] = "%#IslandDiffChange#~" .. d.changed end
+        if (d.removed or 0) > 0 then parts[#parts + 1] = "%#IslandDiffDelete#-" .. d.removed end
+        if #parts == 0 then return "" end
+        return island(nil, "", table.concat(parts, " "))
+      end
+
+      local function c_file()
+        local name = vim.fn.expand("%:t")
+        if name == "" then name = "[No Name]" end
+        local ic = ""
+        local ok, dev = pcall(require, "nvim-web-devicons")
+        if ok then ic = dev.get_icon(name, vim.fn.expand("%:e"), { default = true }) or "" end
+        local mod = vim.bo.modified and " ●" or ""
+        return island("IslandIconFile", ic, esc(name .. mod))
+      end
+
+      local function c_diag()
+        if not vim.diagnostic.count then return "" end
+        local counts = vim.diagnostic.count(0)
+        local S = vim.diagnostic.severity
+        local defs = {
+          { S.ERROR, "IslandDiagError", ICON.err },
+          { S.WARN, "IslandDiagWarn", ICON.warn },
+          { S.INFO, "IslandDiagInfo", ICON.info },
+          { S.HINT, "IslandDiagHint", ICON.hint },
+        }
+        local parts = {}
+        for _, d in ipairs(defs) do
+          local n = counts[d[1]]
+          if n and n > 0 then
+            parts[#parts + 1] = "%#" .. d[2] .. "#" .. d[3] .. " " .. n
+          end
+        end
+        if #parts == 0 then return "" end
+        return island(nil, "", table.concat(parts, " "))
+      end
+
+      local function c_lsp()
+        local names = {}
+        for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
+          table.insert(names, client.name)
+        end
+        if #names == 0 then return "" end
+        return island("IslandIconLsp", ICON.lsp, esc(table.concat(names, ", ")))
+      end
+
+      local function c_ft()
+        local ft = vim.bo.filetype
+        if ft == "" then return "" end
+        local ic = ""
+        local ok, dev = pcall(require, "nvim-web-devicons")
+        if ok and dev.get_icon_by_filetype then
+          ic = dev.get_icon_by_filetype(ft, { default = true }) or ""
+        end
+        return island("IslandIconFt", ic, esc(ft))
+      end
+
+      local function c_pos()
+        local l, total = vim.fn.line("."), vim.fn.line("$")
+        local pct = math.floor(l * 100 / math.max(total, 1))
+        local text = esc(string.format("%d%%  %d:%d", pct, l, vim.fn.col(".")))
+        return island("IslandIconPos", ICON.pos, text)
+      end
+
+      local function build_theme()
+        local bg = "NONE"
+        local fg = hexof("Normal", "fg", "#cdd6f4")
+        local sec = { fg = fg, bg = bg }
+        local mode = { a = sec, b = sec, c = sec }
+        return {
+          normal = mode, insert = mode, visual = mode, replace = mode,
+          command = mode, terminal = mode, inactive = mode,
+        }
+      end
+
+      local function comp(fn) return { fn, padding = 0 } end
+
+      local function setup()
+        define_hl()
+        require("lualine").setup({
+          options = {
+            theme = build_theme(),
+            globalstatus = true,
+            component_separators = "",
+            section_separators = "",
+          },
+          sections = {
+            lualine_a = { comp(c_mode) },
+            lualine_b = { comp(c_branch), comp(c_diff) },
+            lualine_c = { comp(c_file) },
+            lualine_x = { comp(c_diag), comp(c_lsp) },
+            lualine_y = { comp(c_ft) },
+            lualine_z = { comp(c_pos) },
+          },
+          inactive_sections = {},
+        })
+      end
+
+      setup()
+
+      local group = vim.api.nvim_create_augroup("IslandStatusline", { clear = true })
+      vim.api.nvim_create_autocmd("ColorScheme", {
+        group = group,
+        callback = function() vim.schedule(setup) end,
+      })
+      vim.api.nvim_create_autocmd({ "FocusGained", "BufWritePost", "ShellCmdPost", "DirChanged" }, {
+        group = group,
+        callback = function() branch_cache = {} end,
+      })
+    end,
+},
 
 	-- Pestañas de buffers
 	{

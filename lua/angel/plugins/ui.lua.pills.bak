@@ -1,0 +1,212 @@
+-- lua/angel/plugins/ui.lua
+-- Dashboard, statusline, bufferline, notificaciones y UI general
+
+return {
+	-- Barra de estado (estilo píldoras)
+{
+    "nvim-lualine/lualine.nvim",
+    dependencies = {
+      "nvim-tree/nvim-web-devicons",
+    },
+    config = function()
+      local L = vim.fn.nr2char(0xe0b6) -- inicio redondeado
+      local R = vim.fn.nr2char(0xe0b4) -- fin redondeado
+
+      local function lsp_clients()
+        local names = {}
+        for _, client in ipairs(vim.lsp.get_clients({ bufnr = 0 })) do
+          table.insert(names, client.name)
+        end
+        return table.concat(names, ", ")
+      end
+
+      -- lee un color de un grupo de highlight del tema activo
+      local function hex(name, key, fallback)
+        local ok, h = pcall(vim.api.nvim_get_hl, 0, { name = name, link = false })
+        if ok and h and h[key] then
+          return string.format("#%06x", h[key])
+        end
+        return fallback
+      end
+
+      -- tema de lualine derivado del colorscheme actual
+      local function build_theme()
+        local bg = hex("Normal", "bg", "#1e1e2e")
+        local fg = hex("Normal", "fg", "#cdd6f4")
+        local pill = hex("Pmenu", "bg", hex("CursorLine", "bg", "#313244"))
+
+        local function mode(color)
+          return {
+            a = { fg = bg, bg = color, gui = "bold" },
+            b = { fg = fg, bg = pill },
+            c = { fg = fg, bg = bg },
+          }
+        end
+
+        return {
+          normal = mode(hex("Function", "fg", "#89b4fa")),
+          insert = mode(hex("String", "fg", "#a6e3a1")),
+          visual = mode(hex("Keyword", "fg", "#cba6f7")),
+          replace = mode(hex("DiagnosticError", "fg", "#f38ba8")),
+          command = mode(hex("Constant", "fg", "#fab387")),
+          inactive = {
+            a = { fg = fg, bg = pill },
+            b = { fg = fg, bg = pill },
+            c = { fg = fg, bg = bg },
+          },
+        }
+      end
+
+      local function setup()
+        require("lualine").setup({
+          options = {
+            theme = build_theme(),
+            globalstatus = true,
+            component_separators = "",
+            section_separators = { left = R, right = L },
+          },
+          sections = {
+            lualine_a = { { "mode", separator = { left = L }, padding = { left = 1, right = 2 } } },
+            lualine_b = { "branch", "diff" },
+            lualine_c = { "filename", lsp_clients },
+            lualine_x = { "diagnostics" },
+            lualine_y = { "filetype", "progress" },
+            lualine_z = { { "location", separator = { right = R }, padding = { left = 2, right = 1 } } },
+          },
+        })
+      end
+
+      setup()
+
+      -- re-armar los colores cuando cambia el tema (incluido el dinámico)
+      vim.api.nvim_create_autocmd("ColorScheme", {
+        callback = function()
+          vim.schedule(setup)
+        end,
+      })
+    end,
+},
+
+	-- Pestañas de buffers
+	{
+		"akinsho/bufferline.nvim",
+		version = "*",
+		dependencies = {
+			"nvim-tree/nvim-web-devicons",
+		},
+		event = "VeryLazy",
+		opts = {
+			options = {
+				mode = "buffers",
+				diagnostics = "nvim_lsp",
+				exclusions = { "alpha", "neo-tree", "terminal" },
+				offsets = {
+					{
+						filetype = "neo-tree",
+						text = "File Explorer",
+						text_align = "left",
+					},
+				},
+				show_close_icon = false,
+				separator_style = "thin",
+			},
+		},
+	},
+
+	-- Dashboard de inicio
+	{
+		"goolord/alpha-nvim",
+		lazy = false,
+		dependencies = {
+			"nvim-tree/nvim-web-devicons",
+		},
+		config = function()
+			local alpha = require("alpha")
+			local dashboard = require("alpha.themes.dashboard")
+
+			dashboard.section.header.val = {
+				"",
+				" ███╗   ██╗███████╗ ██████╗ ██╗   ██╗██╗███╗   ███╗",
+				" ████╗  ██║██╔════╝██╔═══██╗██║   ██║██║████╗ ████║",
+				" ██╔██╗ ██║█████╗  ██║   ██║██║   ██║██║██╔████╔██║",
+				" ██║╚██╗██║██╔══╝  ██║   ██║╚██╗ ██╔╝██║██║╚██╔╝██║",
+				" ██║ ╚████║███████╗╚██████╔╝ ╚████╔╝ ██║██║ ╚═╝ ██║",
+				" ╚═╝  ╚═══╝╚══════╝ ╚═════╝   ╚═══╝  ╚═╝╚═╝     ╚═╝",
+				"",
+			}
+
+			dashboard.section.buttons.val = {
+				dashboard.button("f", " Find Files", "<cmd>Telescope find_files<cr>"),
+				dashboard.button("r", " Recent Files", "<cmd>Telescope oldfiles<cr>"),
+				dashboard.button("n", " New File", "<cmd>enew<cr>"),
+				dashboard.button(
+					"c",
+					" Config",
+					"<cmd>Telescope find_files cwd=" .. vim.fn.stdpath("config") .. "<cr>"
+				),
+				dashboard.button("q", " Quit", "<cmd>q<cr>"),
+			}
+
+			dashboard.section.footer.val = {
+				"",
+				" <leader>ff buscar · <leader>th temas · <leader>? atajos ",
+			}
+
+			alpha.setup(dashboard.opts)
+		end,
+	},
+
+	-- UI mejorada para línea de comandos y mensajes
+	{
+		"folke/noice.nvim",
+		event = "VeryLazy",
+		dependencies = {
+			"MunifTanjim/nui.nvim",
+			{
+				"rcarriga/nvim-notify",
+				opts = {
+					timeout = 1000,
+					stages = "fade",
+				},
+			},
+		},
+		opts = {
+			cmdline = {
+				enabled = true,
+				view = "cmdline_popup",
+				opts = {
+					position = {
+						row = "50%",
+						col = "50%",
+					},
+				},
+			},
+			popupmenu = {
+				enabled = true,
+			},
+			notify = {
+				enabled = true,
+			},
+			messages = {
+				enabled = true,
+			},
+			lsp = {
+				progress = {
+					enabled = false,
+				},
+				override = {
+					["vim.lsp.util.convert_input_to_markdown_lines"] = true,
+					["vim.lsp.util.stylize_markdown"] = true,
+					["cmp.entry.get_documentation"] = true,
+				},
+			},
+			presets = {
+				bottom_search = false,
+				command_palette = false,
+				long_message_to_split = true,
+				inc_rename = false,
+				lsp_doc_border = false,
+			},
+		},
+	},
+}
