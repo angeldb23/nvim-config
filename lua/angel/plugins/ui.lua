@@ -89,7 +89,7 @@ return {
           return string.format("#%02x%02x%02x", mix(ar, br), mix(ag, bgc), mix(ab, bb))
         end
 
-        local appearance = require("angel.appearance_layout")
+        local appearance = require("angel.ui_defaults")
         local preset = appearance.presets[appearance_id or appearance.get()]
         pill_shape = preset and preset.pill_shape or "rounded"
         local base = hexof("CursorLine", "bg", nil) or hexof("Pmenu", "bg", nil)
@@ -277,7 +277,7 @@ return {
 
       local function setup(layout_override, appearance_override)
         define_hl(appearance_override)
-        local appearance = require("angel.appearance_layout")
+        local appearance = require("angel.ui_defaults")
         local preset = appearance.presets[appearance_override or appearance.get()]
         local globalstatus = not preset or preset.globalstatus ~= false
         vim.o.laststatus = globalstatus and 3 or 2
@@ -311,32 +311,20 @@ return {
 
       setup()
       require("angel.statusline_layout").set_apply(setup)
-      require("angel.appearance_layout").register("statusline", function(layout)
-        setup(layout.statusline, layout.id)
-      end)
       local function apply_chrome(layout)
         vim.o.showtabline = layout.showtabline
         vim.o.winbar = layout.winbar
         vim.o.laststatus = layout.globalstatus and 3 or 2
         vim.api.nvim_set_hl(0, "LayoutWinBar", { link = layout.winbar_hl })
       end
-      require("angel.appearance_layout").register("chrome", apply_chrome)
-
-      pcall(vim.api.nvim_del_user_command, "NvimLayoutPicker")
-      vim.api.nvim_create_user_command("NvimLayoutPicker", function()
-        require("angel.ui_layout").open()
-      end, { desc = "Choose a complete Neovim appearance" })
-      pcall(vim.api.nvim_del_user_command, "NvimLayoutRefreshShots")
-      vim.api.nvim_create_user_command("NvimLayoutRefreshShots", function()
-        require("angel.ui_layout").refresh_screenshots()
-      end, { desc = "Refresh original screenshots for Neovim layouts" })
+      require("angel.ui_defaults").register("chrome", apply_chrome)
 
       local group = vim.api.nvim_create_augroup("IslandStatusline", { clear = true })
       vim.api.nvim_create_autocmd("ColorScheme", {
         group = group,
         callback = function()
           vim.schedule(setup)
-          local appearance = require("angel.appearance_layout")
+          local appearance = require("angel.ui_defaults")
           local preset = appearance.presets[appearance.get()]
           if preset then apply_chrome(preset) end
           vim.defer_fn(setup, 600) -- por si el wallpaper se escribe un instante después que el esquema
@@ -416,7 +404,7 @@ return {
 				end
 				require("bufferline").setup(config)
 			end
-			require("angel.appearance_layout").register("bufferline", apply_bufferline)
+			require("angel.ui_defaults").register("bufferline", apply_bufferline)
 		end,
 	},
 
@@ -486,13 +474,9 @@ return {
 				hero = { 3, 3, 2 }, editorial = { 2, 3, 2 }, quiet = { 7, 3, 1 },
 				pixel = { 3, 3, 2 }, wide = { 2, 3, 1 },
 			}
-			local dashboard_footers = {
-				hero = "Space+u layouts · <leader>th themes · <leader>? help",
-				editorial = "XCODE / PROJECT     SPACE+U TO CHANGE LAYOUT",
-				quiet = "Space+u layouts",
-				pixel = "SYSTEM READY  //  SPACE+U LAYOUTS",
-				wide = "VISUAL STUDIO / 01     SPACE+U LAYOUTS     <LEADER>TH THEMES",
-			}
+      local dashboard_footers = {
+        hero = "<leader>th themes · <leader>? help",
+      }
 			local function apply_dashboard(layout)
 				local style = layout.dashboard
 				local gaps = dashboard_gaps[style] or dashboard_gaps.hero
@@ -537,7 +521,7 @@ return {
 				if vim.bo.filetype == "alpha" then pcall(alpha.redraw) end
 			end
 
-			require("angel.appearance_layout").register("dashboard", apply_dashboard)
+			require("angel.ui_defaults").register("dashboard", apply_dashboard)
 		end,
 	},
 

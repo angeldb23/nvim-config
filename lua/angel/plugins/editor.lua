@@ -57,8 +57,8 @@ return {
 				defaults.borderchars = borders[layout.id] or borders.glass
 				telescope.setup({ defaults = defaults, pickers = pickers })
 			end
-			apply_telescope(require("angel.appearance_layout").presets[require("angel.appearance_layout").get()])
-			require("angel.appearance_layout").register("telescope", apply_telescope)
+			apply_telescope(require("angel.ui_defaults").presets[require("angel.ui_defaults").get()])
+			require("angel.ui_defaults").register("telescope", apply_telescope)
 		end,
 	},
 
@@ -158,7 +158,7 @@ return {
 				}
 			end
 
-			local appearance = require("angel.appearance_layout")
+			local appearance = require("angel.ui_defaults")
 			local function normalize_tree_highlights()
 				for _, group in ipairs({ "NeoTreeCursorLine", "NeoTreeFileNameOpened" }) do
 					local hl = vim.api.nvim_get_hl(0, { name = group, link = false })

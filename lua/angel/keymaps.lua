@@ -106,13 +106,6 @@ end, {
 	desc = "Statusline Layout Picker",
 })
 
--- Full UI Layout Picker
-vim.keymap.set("n", "<leader>u", function()
-	require("angel.ui_layout").open()
-end, {
-	desc = "Full UI Layout Picker",
-})
-
 -- Telescope
 vim.keymap.set("n", "<leader>ff", function()
 	require("telescope.builtin").find_files()

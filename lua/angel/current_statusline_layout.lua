@@ -1,1 +1,1 @@
-return "video"
+return "workspace"
