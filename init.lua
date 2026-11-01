@@ -16,9 +16,21 @@ vim.api.nvim_create_autocmd("VimEnter", {
 vim.api.nvim_create_autocmd("BufEnter", {
     callback = function(args)
         if vim.bo[args.buf].buftype ~= "" then return end
-        local root = vim.fs.root(args.buf, { ".git", "package.json", "Makefile", "pyproject.toml", "Cargo.toml" })
+        local name = vim.api.nvim_buf_get_name(args.buf)
+        if name == "" or not vim.uv.fs_stat(name) then return end
+        local ok, root = pcall(vim.fs.root, name, { ".git", "package.json", "Makefile", "pyproject.toml", "Cargo.toml" })
+        if not ok then return end
         if root and root ~= vim.uv.cwd() then
             vim.cmd("cd " .. vim.fn.fnameescape(root))
         end
     end,
 })
+
+-- minimap sixel: tira angosta estilo VSCode (letra 2x4, 12 columnas de ancho)
+vim.g.sixel_minimap = { preset = "vscode", cols = 12 }
+
+-- Minimap Sixel: preset legible en tira angosta
+vim.g.sixel_minimap = {
+  preset = 'medio',
+  cols = 14,
+}

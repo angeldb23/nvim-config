@@ -1,7 +1,7 @@
 -- Deja que el fondo de la terminal (foot) se vea a través de nvim
 local groups = {
   "Normal", "NormalNC", "NormalFloat", "SignColumn", "FoldColumn",
-  "LineNr", "EndOfBuffer", "MsgArea",
+  "LineNr", "EndOfBuffer", "MsgArea", "CursorLine",
 }
 local function apply()
   for _, g in ipairs(groups) do

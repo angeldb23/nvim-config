@@ -103,7 +103,7 @@ return {
 				cpp = { "clangtidy" },
 			}
 			lint.linters.selene.cwd = vim.fn.stdpath("config")
-			vim.api.nvim_create_autocmd({ "BufEnter", "BufWritePost", "InsertLeave" }, {
+			vim.api.nvim_create_autocmd({ "BufReadPost", "BufWritePost" }, {
 				callback = function()
 					lint.try_lint()
 				end,

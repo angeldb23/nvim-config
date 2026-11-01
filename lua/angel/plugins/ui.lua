@@ -12,7 +12,7 @@ return {
       local function g(code) return vim.fn.nr2char(code) end
       local L, R = g(0xe0b6), g(0xe0b4) -- bordes redondeados
       local ICON = {
-        branch = g(0xe725), lsp = g(0xf013), pos = g(0xf041),
+        nvim = g(0xe6ae), folder = g(0xf07b), branch = g(0xe725), lsp = g(0xf013), pos = g(0xf041),
         err = g(0xf057), warn = g(0xf071), info = g(0xf05a), hint = g(0xf0eb),
       }
 
@@ -30,8 +30,54 @@ return {
       -- colores de las islas, derivados del tema activo
       local ACCENTS = { N = "Function", I = "String", V = "Keyword", R = "DiagnosticError", C = "Constant", T = "Special" }
       local ACCENT_FB = { N = "#89b4fa", I = "#a6e3a1", V = "#cba6f7", R = "#f38ba8", C = "#fab387", T = "#f5c2e7" }
+      local pill_shape = "rounded"
 
-      local function define_hl()
+      local function pill_edges()
+        if pill_shape == "square" then return "[", "]" end
+        if pill_shape == "angle" then return "<", ">" end
+        if pill_shape == "rail" then return "|", "|" end
+        return L, R
+      end
+
+      -- Fondo que se ve detrás de la ventana, estimado del wallpaper actual:
+      -- promedio de su franja inferior, calculado una vez por wallpaper (en segundo plano)
+      local backdrop_cache, backdrop_pending = {}, {}
+      local function wallpaper_path()
+        local f = io.open(vim.fn.expand("~/.local/state/caelestia/wallpaper/path.txt"), "r")
+        if not f then return nil end
+        local line = f:read("*l")
+        f:close()
+        line = line and vim.trim(line) or ""
+        return line ~= "" and line or nil
+      end
+
+      local function wallpaper_backdrop()
+        local wp = wallpaper_path()
+        if not wp then return nil end
+        if backdrop_cache[wp] then return backdrop_cache[wp] end
+        if not backdrop_pending[wp] and vim.system and vim.fn.executable("magick") == 1 then
+          backdrop_pending[wp] = true
+          vim.system({
+            "magick", "-define", "jpeg:size=480x270", wp .. "[0]",
+            "-gravity", "south", "-crop", "100%x15%+0+0", "+repage",
+            "-resize", "1x1!",
+            "-format", "%[fx:int(255*r)] %[fx:int(255*g)] %[fx:int(255*b)]", "info:",
+          }, { text = true }, function(res)
+            local r, g, b = (res.stdout or ""):match("(%d+)%s+(%d+)%s+(%d+)")
+            if r then
+              local hex = string.format("#%02x%02x%02x", tonumber(r), tonumber(g), tonumber(b))
+              backdrop_cache[wp] = hex
+              vim.schedule(function()
+                vim.g.island_backdrop_last = hex
+                vim.api.nvim_exec_autocmds("User", { pattern = "IslandBackdrop" })
+              end)
+            end
+          end)
+        end
+        return nil
+      end
+
+      local function define_hl(appearance_id)
         local function parse(h)
           h = h:gsub("#", "")
           return tonumber(h:sub(1, 2), 16), tonumber(h:sub(3, 4), 16), tonumber(h:sub(5, 6), 16)
@@ -43,25 +89,34 @@ return {
           return string.format("#%02x%02x%02x", mix(ar, br), mix(ag, bgc), mix(ab, bb))
         end
 
-        local base = hexof("Normal", "bg", nil)
+        local appearance = require("angel.appearance_layout")
+        local preset = appearance.presets[appearance_id or appearance.get()]
+        pill_shape = preset and preset.pill_shape or "rounded"
+        local base = hexof("CursorLine", "bg", nil) or hexof("Pmenu", "bg", nil)
         local basebg = "NONE"
         local dark = base or "#1e1e2e"
         local fg = hexof("Normal", "fg", "#cdd6f4")
-        -- la píldora es un tono claramente distinto del fondo
-        local pill = blend(dark, fg, 0.16)
+        local tint = preset and preset.pill_tint or "Normal"
+        local strength = preset and preset.pill_strength or 0.16
+        local pill = blend(dark, hexof(tint, "fg", fg), strength)
 
         -- la barra tiene EXACTAMENTE el fondo del editor (sin banda)
         set("StatusLine", { fg = fg, bg = basebg })
         set("StatusLineNC", { fg = fg, bg = basebg })
 
         set("IslandBase", { fg = fg, bg = basebg })
-        set("IslandCap", { fg = pill, bg = basebg })
+        -- Neovide aplica la opacidad al fondo del cuerpo pero no al glifo de las puntas:
+        -- se mezcla el color de las puntas con el fondo estimado para que se vean igual
+        local alpha = 1 -- pills opacas (neovide_opacity = 1): sin compensación
+        local backdrop = "#000000" -- sin uso mientras alpha = 1
+        local function capc(c) return blend(backdrop, c, alpha) end
+        set("IslandCap", { fg = capc(pill), bg = basebg })
         set("IslandBody", { fg = fg, bg = pill })
 
         for k, group in pairs(ACCENTS) do
           local accent = hexof(group, "fg", ACCENT_FB[k])
           set("IslandModeBody" .. k, { fg = dark, bg = accent, bold = true })
-          set("IslandModeCap" .. k, { fg = accent, bg = basebg })
+          set("IslandModeCap" .. k, { fg = capc(accent), bg = basebg })
         end
 
         local function icon(name, group, fb)
@@ -69,6 +124,7 @@ return {
         end
         icon("IslandIconBranch", "Keyword", "#cba6f7")
         icon("IslandIconFile", "Function", "#89b4fa")
+        icon("IslandIconFolder", "Directory", "#f9e2af")
         icon("IslandIconLsp", "Constant", "#fab387")
         icon("IslandIconFt", "Type", "#f9e2af")
         icon("IslandIconPos", "Special", "#f5c2e7")
@@ -83,11 +139,12 @@ return {
 
       -- una isla = borde + cuerpo + borde + espacio vacío
       local function island(icon_hl, icon, text)
-        local s = "%#IslandCap#" .. L .. "%#IslandBody# "
+        local left, right = pill_edges()
+        local s = "%#IslandCap#" .. left .. "%#IslandBody# "
         if icon ~= "" then
           s = s .. "%#" .. icon_hl .. "#" .. icon .. "%#IslandBody# "
         end
-        return s .. text .. "%#IslandBody# %#IslandCap#" .. R .. "%#IslandBase#  "
+        return s .. text .. "%#IslandBody# %#IslandCap#" .. right .. "%#IslandBase#  "
       end
 
       local MODES = {
@@ -97,13 +154,22 @@ return {
         t = { "TERMINAL", "T" },
       }
 
+      local function current_file_icon()
+        local name = vim.fn.expand("%:t")
+        if name == "" then return ICON.nvim end
+        local ok, dev = pcall(require, "nvim-web-devicons")
+        if not ok then return ICON.nvim end
+        return dev.get_icon(name, vim.fn.expand("%:e"), { default = true }) or ICON.nvim
+      end
+
       local function c_mode()
         local m = vim.fn.mode()
         local info = MODES[m] or MODES[m:sub(1, 1)] or MODES.n
         local k = info[2]
-        return "%#IslandBase# %#IslandModeCap" .. k .. "#" .. L
-          .. "%#IslandModeBody" .. k .. "# " .. info[1] .. " "
-          .. "%#IslandModeCap" .. k .. "#" .. R .. "%#IslandBase#  "
+        local left, right = pill_edges()
+        return "%#IslandBase# %#IslandModeCap" .. k .. "#" .. left
+          .. "%#IslandModeBody" .. k .. "# " .. current_file_icon() .. " " .. info[1] .. " "
+          .. "%#IslandModeCap" .. k .. "#" .. right .. "%#IslandBase#  "
       end
 
       local branch_cache = {}
@@ -137,11 +203,15 @@ return {
       local function c_file()
         local name = vim.fn.expand("%:t")
         if name == "" then name = "[No Name]" end
-        local ic = ""
-        local ok, dev = pcall(require, "nvim-web-devicons")
-        if ok then ic = dev.get_icon(name, vim.fn.expand("%:e"), { default = true }) or "" end
+        local ic = current_file_icon()
         local mod = vim.bo.modified and " ●" or ""
         return island("IslandIconFile", ic, esc(name .. mod))
+      end
+
+      local function c_dir()
+        local dir = vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
+        if dir == "" then dir = vim.fn.getcwd() end
+        return island("IslandIconFolder", ICON.folder, esc(dir))
       end
 
       local function c_diag()
@@ -205,32 +275,76 @@ return {
 
       local function comp(fn) return { fn, padding = 0 } end
 
-      local function setup()
-        define_hl()
+      local function setup(layout_override, appearance_override)
+        define_hl(appearance_override)
+        local appearance = require("angel.appearance_layout")
+        local preset = appearance.presets[appearance_override or appearance.get()]
+        local globalstatus = not preset or preset.globalstatus ~= false
+        vim.o.laststatus = globalstatus and 3 or 2
+        local layout_module = require("angel.statusline_layout")
+        local layout_id = layout_override or layout_module.get()
+        local layout = layout_module.find(layout_id) or layout_module.find("video")
+        local components = {
+          mode = comp(c_mode), file = comp(c_file), dir = comp(c_dir),
+          diag = comp(c_diag), ft = comp(c_ft), pos = comp(c_pos),
+        }
+        local sections = {}
+        for _, section in ipairs({ "a", "b", "c", "x", "y", "z" }) do
+          local items = {}
+          for _, key in ipairs(layout.sections[section] or {}) do
+            if components[key] then items[#items + 1] = components[key] end
+          end
+          sections["lualine_" .. section] = items
+        end
+
         require("lualine").setup({
           options = {
             theme = build_theme(),
-            globalstatus = true,
+            globalstatus = globalstatus,
             component_separators = "",
             section_separators = "",
           },
-          sections = {
-            lualine_a = { comp(c_mode) },
-            lualine_b = { comp(c_branch), comp(c_diff) },
-            lualine_c = { comp(c_file) },
-            lualine_x = { comp(c_diag), comp(c_lsp) },
-            lualine_y = { comp(c_ft) },
-            lualine_z = { comp(c_pos) },
-          },
-          inactive_sections = {},
+          sections = sections,
+          inactive_sections = globalstatus and {} or sections,
         })
       end
 
       setup()
+      require("angel.statusline_layout").set_apply(setup)
+      require("angel.appearance_layout").register("statusline", function(layout)
+        setup(layout.statusline, layout.id)
+      end)
+      local function apply_chrome(layout)
+        vim.o.showtabline = layout.showtabline
+        vim.o.winbar = layout.winbar
+        vim.o.laststatus = layout.globalstatus and 3 or 2
+        vim.api.nvim_set_hl(0, "LayoutWinBar", { link = layout.winbar_hl })
+      end
+      require("angel.appearance_layout").register("chrome", apply_chrome)
+
+      pcall(vim.api.nvim_del_user_command, "NvimLayoutPicker")
+      vim.api.nvim_create_user_command("NvimLayoutPicker", function()
+        require("angel.ui_layout").open()
+      end, { desc = "Choose a complete Neovim appearance" })
+      pcall(vim.api.nvim_del_user_command, "NvimLayoutRefreshShots")
+      vim.api.nvim_create_user_command("NvimLayoutRefreshShots", function()
+        require("angel.ui_layout").refresh_screenshots()
+      end, { desc = "Refresh original screenshots for Neovim layouts" })
 
       local group = vim.api.nvim_create_augroup("IslandStatusline", { clear = true })
       vim.api.nvim_create_autocmd("ColorScheme", {
         group = group,
+        callback = function()
+          vim.schedule(setup)
+          local appearance = require("angel.appearance_layout")
+          local preset = appearance.presets[appearance.get()]
+          if preset then apply_chrome(preset) end
+          vim.defer_fn(setup, 600) -- por si el wallpaper se escribe un instante después que el esquema
+        end,
+      })
+      vim.api.nvim_create_autocmd("User", {
+        group = group,
+        pattern = "IslandBackdrop",
         callback = function() vim.schedule(setup) end,
       })
       vim.api.nvim_create_autocmd({ "FocusGained", "BufWritePost", "ShellCmdPost", "DirChanged" }, {
@@ -262,8 +376,48 @@ return {
 				},
 				show_close_icon = false,
 				separator_style = "thin",
+				custom_filter = function(bufnr)
+					if vim.g.nvim_layout_capturing then
+						local name = vim.api.nvim_buf_get_name(bufnr)
+						return name:match("/layout%-demo/src/App%.tsx$") ~= nil
+							or name:match("/layout%-demo/src/styles%.css$") ~= nil
+					end
+					return true
+				end,
 			},
 		},
+		config = function(_, opts)
+			local base = vim.deepcopy(opts)
+			local bufferline_commands = {
+				"BufferLinePick", "BufferLinePickClose", "BufferLineCycleNext", "BufferLineCyclePrev",
+				"BufferLineCloseRight", "BufferLineCloseLeft", "BufferLineCloseOthers",
+				"BufferLineMoveNext", "BufferLineMovePrev", "BufferLineSortByExtension",
+				"BufferLineSortByDirectory", "BufferLineSortByRelativeDirectory", "BufferLineSortByTabs",
+				"BufferLineGoToBuffer", "BufferLineTogglePin", "BufferLineTabRename",
+				"BufferLineGroupClose", "BufferLineGroupToggle",
+			}
+			local function apply_bufferline(layout)
+				local config = vim.deepcopy(base)
+				local tab_styles = {
+					glass = { size = 18, max = 20, indicator = "icon" },
+					atelier = { size = 24, max = 28, indicator = "underline" },
+					focus = { size = 18, max = 18, indicator = "icon" },
+					arcade = { size = 20, max = 18, indicator = "icon" },
+					workbench = { size = 26, max = 32, indicator = "underline" },
+				}
+				local style = tab_styles[layout.id] or tab_styles.glass
+				config.options.separator_style = layout.bufferline
+				config.options.tab_size = style.size
+				config.options.max_name_length = style.max
+				config.options.indicator = config.options.indicator or {}
+				config.options.indicator.style = style.indicator
+				for _, command in ipairs(bufferline_commands) do
+					pcall(vim.api.nvim_del_user_command, command)
+				end
+				require("bufferline").setup(config)
+			end
+			require("angel.appearance_layout").register("bufferline", apply_bufferline)
+		end,
 	},
 
 	-- Dashboard de inicio
@@ -276,8 +430,8 @@ return {
 		config = function()
 			local alpha = require("alpha")
 			local dashboard = require("alpha.themes.dashboard")
-
-			dashboard.section.header.val = {
+			local headers = {
+				hero = {
 				"",
 				" ███╗   ██╗███████╗ ██████╗ ██╗   ██╗██╗███╗   ███╗",
 				" ████╗  ██║██╔════╝██╔═══██╗██║   ██║██║████╗ ████║",
@@ -286,26 +440,104 @@ return {
 				" ██║ ╚████║███████╗╚██████╔╝ ╚████╔╝ ██║██║ ╚═╝ ██║",
 				" ╚═╝  ╚═══╝╚══════╝ ╚═════╝   ╚═══╝  ╚═╝╚═╝     ╚═╝",
 				"",
+				},
+				editorial = { "", "╭────────────────────────────────────╮", "│        X C O D E   /   PROJECT      │", "│       code · focus · clarity        │", "╰────────────────────────────────────╯", "" },
+				quiet = { "", "N E O V I M", "───────────", "" },
+				pixel = {
+					"",
+					" +---+ +---+ +---+ +---+ +---+ +---+",
+					" | N | | E | | O | | V | | I | | M |",
+					" +---+ +---+ +---+ +---+ +---+ +---+",
+					"        TURBO C / NEOVIM",
+					"",
+				},
+				wide = {
+					"",
+					"╔══════════════════════════════════════════════════════╗",
+					"║  N E O V I M                 VISUAL STUDIO / 01     ║",
+					"╚══════════════════════════════════════════════════════╝",
+					"",
+				},
 			}
 
-			dashboard.section.buttons.val = {
-				dashboard.button("f", " Find Files", "<cmd>Telescope find_files<cr>"),
-				dashboard.button("r", " Recent Files", "<cmd>Telescope oldfiles<cr>"),
-				dashboard.button("n", " New File", "<cmd>enew<cr>"),
-				dashboard.button(
-					"c",
-					" Config",
-					"<cmd>Telescope find_files cwd=" .. vim.fn.stdpath("config") .. "<cr>"
-				),
-				dashboard.button("q", " Quit", "<cmd>q<cr>"),
+			local actions = {
+				f = "<cmd>Telescope find_files<cr>",
+				r = "<cmd>Telescope oldfiles<cr>",
+				n = "<cmd>enew<cr>",
+				c = "<cmd>Telescope find_files cwd=" .. vim.fn.stdpath("config") .. "<cr>",
+				q = "<cmd>q<cr>",
 			}
-
-			dashboard.section.footer.val = {
-				"",
-				" <leader>ff buscar · <leader>th temas · <leader>? atajos ",
+			local button_labels = {
+				hero = { { "f", "  Find files" }, { "r", "  Recent files" }, { "n", "  New file" }, { "c", "  Configuration" }, { "q", "  Quit" } },
+				editorial = { { "f", "Search the project" }, { "r", "Recent documents" }, { "n", "Create a file" }, { "c", "Open configuration" }, { "q", "Quit Neovim" } },
+				quiet = { { "f", "Files" }, { "r", "Recent" }, { "n", "New" }, { "c", "Config" }, { "q", "Quit" } },
+				pixel = { { "f", "FIND FILES" }, { "r", "RECENT FILES" }, { "n", "NEW FILE" }, { "c", "CONFIGURATION" }, { "q", "QUIT" } },
+				wide = { { "f", "01  Find files" }, { "r", "02  Recent files" }, { "n", "03  New file" }, { "c", "04  Configuration" }, { "q", "05  Quit" } },
 			}
+			local function make_buttons(style)
+				local buttons = {}
+				for _, item in ipairs(button_labels[style] or button_labels.hero) do
+					buttons[#buttons + 1] = dashboard.button(item[1], item[2], actions[item[1]])
+				end
+				return buttons
+			end
 
-			alpha.setup(dashboard.opts)
+			local dashboard_gaps = {
+				hero = { 3, 3, 2 }, editorial = { 2, 3, 2 }, quiet = { 7, 3, 1 },
+				pixel = { 3, 3, 2 }, wide = { 2, 3, 1 },
+			}
+			local dashboard_footers = {
+				hero = "Space+u layouts · <leader>th themes · <leader>? help",
+				editorial = "XCODE / PROJECT     SPACE+U TO CHANGE LAYOUT",
+				quiet = "Space+u layouts",
+				pixel = "SYSTEM READY  //  SPACE+U LAYOUTS",
+				wide = "VISUAL STUDIO / 01     SPACE+U LAYOUTS     <LEADER>TH THEMES",
+			}
+			local function apply_dashboard(layout)
+				local style = layout.dashboard
+				local gaps = dashboard_gaps[style] or dashboard_gaps.hero
+				dashboard.section.header.val = headers[style] or headers.hero
+				dashboard.section.header.opts = dashboard.section.header.opts or {}
+				dashboard.section.header.opts.hl = "AlphaHeader"
+				dashboard.section.header.opts.position = style == "wide" and "left" or "center"
+				dashboard.section.buttons.val = make_buttons(style)
+				dashboard.section.buttons.opts = dashboard.section.buttons.opts or {}
+				dashboard.section.buttons.opts.hl = "AlphaButtons"
+				dashboard.section.buttons.opts.hl_shortcut = "AlphaShortcut"
+				dashboard.section.buttons.opts.position = style == "wide" and "left" or "center"
+				dashboard.section.footer.val = { "", " " .. (dashboard_footers[style] or dashboard_footers.hero) .. " " }
+				dashboard.section.footer.opts = dashboard.section.footer.opts or {}
+				dashboard.section.footer.opts.hl = "AlphaFooter"
+				dashboard.opts.layout = {
+					{ type = "padding", val = gaps[1] },
+					dashboard.section.header,
+					{ type = "padding", val = gaps[2] },
+					dashboard.section.buttons,
+					{ type = "padding", val = gaps[3] },
+					dashboard.section.footer,
+				}
+				local header_highlights = {
+					hero = "Function", editorial = "Title", quiet = "Comment",
+					pixel = "DiagnosticInfo", wide = "Directory",
+				}
+				local shortcut_highlights = {
+					hero = "Keyword", editorial = "Function", quiet = "Comment",
+					pixel = "DiagnosticWarn", wide = "Title",
+				}
+				vim.api.nvim_set_hl(0, "AlphaHeader", { link = header_highlights[style] or "Function" })
+				vim.api.nvim_set_hl(0, "AlphaButtons", { link = "Normal" })
+				vim.api.nvim_set_hl(0, "AlphaShortcut", { link = shortcut_highlights[style] or "Keyword" })
+				local footer_highlights = {
+					hero = "Comment", editorial = "Title", quiet = "Comment",
+					pixel = "DiagnosticWarn", wide = "Directory",
+				}
+				vim.api.nvim_set_hl(0, "AlphaFooter", { link = footer_highlights[style] or "Comment" })
+				pcall(vim.api.nvim_del_user_command, "Alpha")
+				alpha.setup(dashboard.opts)
+				if vim.bo.filetype == "alpha" then pcall(alpha.redraw) end
+			end
+
+			require("angel.appearance_layout").register("dashboard", apply_dashboard)
 		end,
 	},
 

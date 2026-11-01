@@ -243,7 +243,7 @@ local function save_theme(theme)
 
     if not file then
         vim.notify(
-            "No se pudo guardar el tema",
+            "Could not save the theme",
             vim.log.levels.ERROR
         )
         return false
@@ -979,7 +979,7 @@ function M.open()
             close(false)
 
             vim.notify(
-                "Tema guardado: " .. chosen,
+                "Theme saved: " .. chosen,
                 vim.log.levels.INFO
             )
         end
