@@ -43,6 +43,7 @@ vim.opt.listchars = {
 	trail = "·",
 	nbsp = "␣",
 }
+vim.opt.fillchars:append({ eob = " " })
 
 --------------------------------------------------------
 -- Calidad de vida nativa (sin plugins)
