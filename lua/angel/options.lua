@@ -1,6 +1,7 @@
 -- Líneas e indentación
 vim.opt.number = true
 vim.opt.relativenumber = true
+vim.opt.numberwidth = 3
 
 vim.opt.expandtab = true
 vim.opt.shiftwidth = 4

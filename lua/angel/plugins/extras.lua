@@ -1,11 +1,41 @@
 return {
   {
+    "tiagovla/scope.nvim",
+    lazy = false,
+    config = true,
+  },
+
+  {
+    "nvim-mini/mini.indentscope",
+    event = { "BufReadPost", "BufNewFile" },
+    config = function()
+      local indentscope = require("mini.indentscope")
+      indentscope.setup({
+        draw = {
+          delay = 20,
+          animation = indentscope.gen_animation.quadratic({ easing = "out", duration = 100, unit = "total" }),
+        },
+        mappings = {
+          object_scope = "",
+          object_scope_with_border = "",
+          goto_top = "",
+          goto_bottom = "",
+        },
+        options = { border = "both", indent_at_cursor = false, try_as_border = true },
+        symbol = "│",
+      })
+    end,
+  },
+
+  {
     "lukas-reineke/indent-blankline.nvim",
     main = "ibl",
     event = { "BufReadPost", "BufNewFile" },
     opts = {
       indent = { char = "│" },
-      scope = { show_start = false, show_end = false },
+      scope = {
+        enabled = false,
+      },
     },
   },
 

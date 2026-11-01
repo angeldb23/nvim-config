@@ -2,6 +2,22 @@
 -- Dashboard, statusline, bufferline, notificaciones y UI general
 
 return {
+	-- Breadcrumbs de archivo y símbolo para la winbar
+	{
+		"SmiteshP/nvim-navic",
+		event = { "BufReadPost", "BufNewFile" },
+		opts = {
+			icons = { enabled = true },
+			highlight = true,
+			separator = "  ›  ",
+			depth_limit = 4,
+			depth_limit_indicator = "…",
+			safe_output = true,
+			lazy_update_context = false,
+			lsp = { auto_attach = true },
+		},
+	},
+
 	-- Barra de estado (islas)
 {
     "nvim-lualine/lualine.nvim",
@@ -262,6 +278,28 @@ return {
         return island("IslandIconPos", ICON.pos, text)
       end
 
+      local function c_breadcrumb()
+        local filename = vim.api.nvim_buf_get_name(0)
+        if filename == "" then return "" end
+        local path = vim.fn.fnamemodify(filename, ":.")
+        if path:match("^/") or path:match("^%.%./") then
+          local parent = vim.fn.fnamemodify(filename, ":h:t")
+          path = parent ~= "" and (parent .. "/" .. vim.fn.fnamemodify(filename, ":t"))
+            or vim.fn.fnamemodify(filename, ":t")
+        end
+        local parts = vim.split(path, "/", { trimempty = true })
+        if #parts > 4 then
+          parts = { "…", parts[#parts - 2], parts[#parts - 1], parts[#parts] }
+        end
+        return table.concat(vim.tbl_map(esc, parts), "  ›  ")
+      end
+
+      local function c_code_context()
+        local ok, navic = pcall(require, "nvim-navic")
+        if not ok or not navic.is_available() then return "" end
+        return navic.get_location()
+      end
+
       local function build_theme()
         local bg = "NONE"
         local fg = hexof("Normal", "fg", "#cdd6f4")
@@ -303,9 +341,29 @@ return {
             globalstatus = globalstatus,
             component_separators = "",
             section_separators = "",
+            refresh = {
+              statusline = 50,
+              tabline = 50,
+              winbar = 50,
+              refresh_time = 16,
+            },
+            disabled_filetypes = {
+              winbar = { "alpha", "neo-tree", "help", "TelescopePrompt", "lazy" },
+            },
           },
           sections = sections,
           inactive_sections = globalstatus and {} or sections,
+          winbar = {
+            lualine_c = {
+              { c_breadcrumb, padding = { left = 1, right = 1 }, color = { fg = hexof("Comment", "fg", "#a6adc8") } },
+              { c_code_context, cond = function() return c_code_context() ~= "" end, padding = { left = 1, right = 1 } },
+            },
+          },
+          inactive_winbar = {
+            lualine_c = {
+              { c_breadcrumb, padding = { left = 1, right = 1 }, color = { fg = hexof("Comment", "fg", "#a6adc8") } },
+            },
+          },
         })
       end
 
@@ -313,9 +371,7 @@ return {
       require("angel.statusline_layout").set_apply(setup)
       local function apply_chrome(layout)
         vim.o.showtabline = layout.showtabline
-        vim.o.winbar = layout.winbar
         vim.o.laststatus = layout.globalstatus and 3 or 2
-        vim.api.nvim_set_hl(0, "LayoutWinBar", { link = layout.winbar_hl })
       end
       require("angel.ui_defaults").register("chrome", apply_chrome)
 
@@ -363,6 +419,10 @@ return {
 					},
 				},
 				show_close_icon = false,
+				always_show_bufferline = true,
+				tab_size = 20,
+				max_name_length = 24,
+				indicator = { style = "icon" },
 				separator_style = "thin",
 				custom_filter = function(bufnr)
 					if vim.g.nvim_layout_capturing then
