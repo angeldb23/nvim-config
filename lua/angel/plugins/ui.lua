@@ -596,6 +596,9 @@ return {
 				opts = {
 					timeout = 1000,
 					stages = "fade",
+					-- nvim-notify necesita un color RGB para calcular la transparencia.
+					-- El grupo NotifyBackground no siempre está definido por el tema activo.
+					background_colour = "#000000",
 				},
 			},
 		},
