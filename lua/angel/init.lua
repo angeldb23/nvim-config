@@ -1,5 +1,6 @@
 require("angel.options")
 require("angel.keymaps")
+require("angel.autocmds")
 require("angel.lazy")
 
 -- En VSCode, LSP / terminal / run los maneja VSCode

@@ -84,10 +84,12 @@ return {
 				c = { "clang_format" },
 				cpp = { "clang_format" },
 			},
-			format_on_save = {
-				timeout_ms = 500,
-				lsp_format = "fallback",
-			},
+			format_on_save = function(_)
+				return {
+					timeout_ms = 1000,
+					lsp_format = "fallback",
+				}
+			end,
 			formatters = {
 				clang_format = {
 					prepend_args = {

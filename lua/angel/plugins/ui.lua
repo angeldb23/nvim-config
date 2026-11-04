@@ -109,14 +109,13 @@ return {
         local preset = appearance.presets[appearance_id or appearance.get()]
         pill_shape = preset and preset.pill_shape or "rounded"
         local base = hexof("CursorLine", "bg", nil) or hexof("Pmenu", "bg", nil)
-        local basebg = "NONE"
         local dark = base or "#1e1e2e"
+        local basebg = "NONE"
         local fg = hexof("Normal", "fg", "#cdd6f4")
         local tint = preset and preset.pill_tint or "Normal"
         local strength = preset and preset.pill_strength or 0.16
         local pill = blend(dark, hexof(tint, "fg", fg), strength)
 
-        -- la barra tiene EXACTAMENTE el fondo del editor (sin banda)
         set("StatusLine", { fg = fg, bg = basebg })
         set("StatusLineNC", { fg = fg, bg = basebg })
 

@@ -57,4 +57,23 @@ function M.run_cmd(cmd)
 	vim.api.nvim_chan_send(vim.bo[term.buf].channel, cmd .. "\n")
 end
 
+function M.run_task(cmd, label)
+	if not (term.win and vim.api.nvim_win_is_valid(term.win)) then
+		terminal_open(false)
+	end
+
+	local buf = vim.api.nvim_create_buf(false, true)
+	term.buf = buf
+	vim.api.nvim_win_set_buf(term.win, buf)
+	vim.fn.termopen(cmd, {
+		on_exit = function(_, code)
+			vim.schedule(function()
+				if code == 0 then return end
+				vim.notify((label or "Task") .. " failed (exit code " .. code .. "). See terminal output.", vim.log.levels.ERROR)
+			end)
+		end,
+	})
+	vim.cmd("startinsert")
+end
+
 return M
