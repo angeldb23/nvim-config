@@ -99,6 +99,15 @@ local function generated_project(root)
 	return table.concat(lines, "\n"):find(GENERATED_MARKER, 1, true) ~= nil
 end
 
+local function has_build_targets(root)
+	local path = root .. "/CMakeLists.txt"
+	local ok, lines = pcall(vim.fn.readfile, path)
+	if not ok then return false end
+	local config = table.concat(lines, "\n")
+	return config:match("add_executable%s*%(") ~= nil
+		or config:match("add_subdirectory%s*%(") ~= nil
+end
+
 local function run_generated(root)
 	local name = project_name(root)
 	local build_dir = root .. "/build"
@@ -124,7 +133,8 @@ function M.try_run(file)
 		run_generated(root)
 		return true
 	end
-	if stat then
+	if stat and has_build_targets(root) then
+		vim.cmd("cd " .. vim.fn.fnameescape(root))
 		vim.cmd("CMakeRun")
 		return true
 	end
@@ -147,7 +157,8 @@ end
 
 function M.build_existing(file)
 	local root = vim.fs.root(vim.fn.fnamemodify(file, ":p"), { "CMakeLists.txt" })
-	if not root then return false end
+	if not root or not has_build_targets(root) then return false end
+	vim.cmd("cd " .. vim.fn.fnameescape(root))
 	vim.cmd("CMakeBuild")
 	return true
 end

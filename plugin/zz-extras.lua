@@ -30,10 +30,3 @@ vim.keymap.set("v", ">", ">gv")
 -- Fix: Ctrl+A en insert escribía "ggVG" como texto
 vim.keymap.set("i", "<C-a>", "<Esc>ggVG", { desc = "Select All" })
 
--- Fix: <leader>r (run) chocaba con <leader>rn (rename) y se demoraba ~1s.
--- Run pasa a <leader>x
-local m = vim.fn.maparg("<leader>r", "n", false, true)
-if m.callback then
-  vim.keymap.del("n", "<leader>r")
-  vim.keymap.set("n", "<leader>x", m.callback, { desc = "Run / Compile current file" })
-end

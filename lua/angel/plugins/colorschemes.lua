@@ -26,6 +26,10 @@ return {
 	},
 
 	{
+		"sainnhe/gruvbox-material",
+	},
+
+	{
 		"rebelot/kanagawa.nvim",
 	},
 

@@ -1,1 +1,1 @@
-return "caelestia"
+return "gruvbox-material"
