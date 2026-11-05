@@ -357,6 +357,18 @@ return {
               { c_breadcrumb, padding = { left = 1, right = 1 }, color = { fg = hexof("Comment", "fg", "#a6adc8") } },
               { c_code_context, cond = function() return c_code_context() ~= "" end, padding = { left = 1, right = 1 } },
             },
+            lualine_z = {
+            	{
+            		function() return "▶ Run" end,
+            		padding = { left = 1, right = 1 },
+            		color = { fg = hexof("String", "fg", "#a6e3a1"), gui = "bold" },
+            		cond = function()
+            			local ft = vim.bo.filetype
+            			return vim.bo.buftype == "" and (ft == "cpp" or ft == "c" or ft == "python" or ft == "lua" or ft == "sh")
+            		end,
+            		on_click = function() if _G.AngelRunClick then _G.AngelRunClick() end end,
+            	},
+            },
           },
           inactive_winbar = {
             lualine_c = {

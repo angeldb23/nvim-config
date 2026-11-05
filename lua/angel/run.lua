@@ -39,3 +39,8 @@ vim.keymap.set("n", "<leader>b", function()
 	if file ~= "" and require("angel.cmake").build_existing(file) then return end
 	vim.notify("No encontré un proyecto CMake en este archivo.", vim.log.levels.INFO)
 end, { desc = "Build CMake project" })
+
+-- Handler del boton Run (el boton vive en la winbar de lualine, plugins/ui.lua)
+function _G.AngelRunClick()
+	run()
+end

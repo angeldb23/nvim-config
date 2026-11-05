@@ -11,32 +11,24 @@ local function project_name(root)
 	return name
 end
 
-local function detect_dependencies(root)
+local function detect_dependencies(file)
 	local found = {}
-	local sources = vim.fn.globpath(root, "**/*.{cpp,cc,cxx,h,hpp,hxx}", false, true)
-	for _, path in ipairs(sources) do
-		if not path:match("/build/") and not path:match("/%.git/")
-			and not path:match("/vendor/") and not path:match("/referencias/")
-			and not path:match("/third_party/")
-		then
-			local ok, lines = pcall(vim.fn.readfile, path)
-			if ok then
-				for _, line in ipairs(lines) do
-					if line:match("#%s*include%s*[<\"]raylib%.h[>\"]") then found.raylib = true end
-					if line:match("#%s*include%s*[<\"]SDL3/SDL%.h[>\"]") then found.sdl3 = true end
-					if line:match("#%s*include%s*[<\"]SDL%.h[>\"]") then found.sdl2 = true end
-					if line:match("#%s*include%s*[<\"]GLFW/glfw3%.h[>\"]") then found.glfw = true end
-					if line:match("#%s*include%s*[<\"]vulkan/vulkan%.h[>\"]")
-						or line:match("#%s*include%s*[<\"]vulkan/vulkan%.hpp[>\"]")
-					then found.vulkan = true end
-					if line:match("#%s*include%s*[<\"]GL/gl%.h[>\"]")
-						or line:match("#%s*include%s*[<\"]OpenGL/gl%.h[>\"]")
-						or line:match("#%s*include%s*[<\"]glad/gl%.h[>\"]")
-						or line:match("#%s*include%s*[<\"]SDL[23]?/SDL_opengl%.h[>\"]")
-					then found.opengl = true end
-					if line:match("#%s*include%s*[<\"]GL/glew%.h[>\"]") then found.glew = true end
-				end
-			end
+	local ok, lines = pcall(vim.fn.readfile, file)
+	if ok then
+		for _, line in ipairs(lines) do
+			if line:match("#%s*include%s*[<\"]raylib%.h[>\"]") then found.raylib = true end
+			if line:match("#%s*include%s*[<\"]SDL3/SDL%.h[>\"]") then found.sdl3 = true end
+			if line:match("#%s*include%s*[<\"]SDL%.h[>\"]") then found.sdl2 = true end
+			if line:match("#%s*include%s*[<\"]GLFW/glfw3%.h[>\"]") then found.glfw = true end
+			if line:match("#%s*include%s*[<\"]vulkan/vulkan%.h[>\"]")
+				or line:match("#%s*include%s*[<\"]vulkan/vulkan%.hpp[>\"]")
+			then found.vulkan = true end
+			if line:match("#%s*include%s*[<\"]GL/gl%.h[>\"]")
+				or line:match("#%s*include%s*[<\"]OpenGL/gl%.h[>\"]")
+				or line:match("#%s*include%s*[<\"]glad/gl%.h[>\"]")
+				or line:match("#%s*include%s*[<\"]SDL[23]?/SDL_opengl%.h[>\"]")
+			then found.opengl = true end
+			if line:match("#%s*include%s*[<\"]GL/glew%.h[>\"]") then found.glew = true end
 		end
 	end
 	if found.glew then found.opengl = true end
@@ -123,6 +115,15 @@ local function run_generated(root)
 	require("angel.terminal").run_task(command, "Build/run")
 end
 
+local function has_main(file)
+	local ok, lines = pcall(vim.fn.readfile, file)
+	if not ok then return false end
+	for _, line in ipairs(lines) do
+		if line:match("int%s+main%s*%(") then return true end
+	end
+	return false
+end
+
 function M.try_run(file)
 	file = vim.fn.fnamemodify(file, ":p")
 	local root = vim.fs.root(file, { "CMakeLists.txt" }) or vim.fs.dirname(file)
@@ -130,6 +131,8 @@ function M.try_run(file)
 	local stat = vim.uv.fs_stat(cmake_path)
 
 	if stat and generated_project(root) then
+		local deps = detect_dependencies(file)
+		if next(deps) == nil and has_main(file) then return false end
 		run_generated(root)
 		return true
 	end
@@ -139,7 +142,10 @@ function M.try_run(file)
 		return true
 	end
 
-	local deps = detect_dependencies(root)
+	-- Decide whether this file needs a generated graphics build from its own
+	-- includes. Scanning the whole folder can mistake an unrelated example for
+	-- this file and build every .cpp in a scratch directory.
+	local deps = detect_dependencies(file)
 	local recognized = next(deps) ~= nil
 	if vim.bo.filetype == "cpp" and recognized and (not stat or generated_project(root)) then
 		local ok, err = pcall(vim.fn.writefile, vim.split(generated_cmake(project_name(root), deps), "\n"), cmake_path)
