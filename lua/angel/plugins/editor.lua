@@ -45,10 +45,20 @@ return {
 				local defaults = vim.deepcopy(base_defaults)
 				defaults.layout_strategy = style.strategy
 				defaults.layout_config = {
-					width = 0.9,
+					-- Keep the picker inside the available screen and adapt the preview
+					-- split to the actual terminal width (including resized Neovide windows).
+					width = function(_, columns)
+						return math.min(columns, math.floor(columns * 0.94))
+					end,
 					height = 0.84,
 					horizontal = {
-						preview_width = style.preview_width,
+						-- Telescope's default is 120 columns, which hides the preview
+						-- as soon as Neovide's larger font makes the grid narrower.
+						preview_cutoff = 72,
+						preview_width = function(_, width)
+							local ratio = width < 90 and 0.44 or width < 125 and 0.50 or style.preview_width
+							return math.min(width - 34, math.max(24, math.floor(width * ratio)))
+						end,
 						prompt_position = "top",
 						mirror = style.mirror,
 					},

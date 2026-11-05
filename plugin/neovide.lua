@@ -4,5 +4,5 @@ if vim.g.neovide then
   vim.g.neovide_opacity = 1.0
   vim.g.neovide_normal_opacity = a
   vim.o.guifont = "CaskaydiaCove Nerd Font:h12:b:i"
-  vim.g.neovide_scale_factor = 1.10
+  vim.g.neovide_scale_factor = 1.18
 end
